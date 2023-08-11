@@ -1,4 +1,5 @@
 import os
+import pdb
 
 from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
@@ -18,7 +19,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False
-app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = True
+app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', "it's a secret")
 toolbar = DebugToolbarExtension(app)
 
@@ -112,8 +113,11 @@ def login():
 @app.route('/logout')
 def logout():
     """Handle logout of user."""
+    user = User.query.get(session[CURR_USER_KEY])
 
-    # IMPLEMENT THIS
+    do_login(user)
+    flash(f"A Bientot, {user.username}!", "Logout success")
+    return redirect("/login")
 
 
 ##############################################################################
@@ -150,6 +154,10 @@ def users_show(user_id):
                 .order_by(Message.timestamp.desc())
                 .limit(100)
                 .all())
+    
+    # python debugger for adding a breakpoint
+    # pdb.set_trace()
+
     return render_template('users/show.html', user=user, messages=messages)
 
 
