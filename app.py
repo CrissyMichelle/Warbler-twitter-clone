@@ -3,9 +3,10 @@ import pdb
 
 from flask import Flask, render_template, request, flash, redirect, session, g
 from flask_debugtoolbar import DebugToolbarExtension
+from sqlalchemy.orm import aliased
 from sqlalchemy.exc import IntegrityError
 
-from forms import UserAddForm, LoginForm, MessageForm
+from forms import UserAddForm, LoginForm, MessageForm, EditUserForm
 from models import db, connect_db, User, Message
 
 CURR_USER_KEY = "curr_user"
@@ -40,6 +41,12 @@ def add_user_to_g():
     else:
         g.user = None
 
+# imitating the starter code's before app set-up function for global user
+@app.before_request
+def add_db_to_g():
+    """Add current database session to Flask global."""
+    if db not in g:
+        g.db = db.session
 
 def do_login(user):
     """Log in user."""
@@ -216,10 +223,40 @@ def stop_following(follow_id):
 
 
 @app.route('/users/profile', methods=["GET", "POST"])
-def profile():
+def edit_profile():
     """Update profile for current user."""
+    user_id = g.user.id
 
-    # IMPLEMENT THIS
+    form = EditUserForm()
+    if form.validate_on_submit():
+        editing_user = User.authenticate(g.user.username, form.password.data)
+        if editing_user:
+            try:
+                editing_user = User.query.get(user_id)
+
+                if form.username.data:
+                    editing_user.username=form.username.data
+                if form.email.data:    
+                    editing_user.email=form.email.data
+                if form.image_url.data:
+                    editing_user.image_url=form.image_url.data
+                if form.header_image_url.data:
+                    editing_user.header_image_url=form.header_image_url.data
+                if form.bio.data:
+                    editing_user.bio=form.bio.data
+                if form.location.data:
+                    editing_user.location=form.location.data
+
+                db.session.commit()
+                return redirect(f"/users/{user_id}")
+            
+            except IntegrityError: 
+                flash("Issue with form validation", 'danger')                      
+                return render_template("users/edit.html", form=form)
+        flash("Bad Password", 'danger')
+        return redirect("/")
+    else:
+        return render_template("users/edit.html", form=form)
 
 
 @app.route('/users/delete', methods=["POST"])
@@ -300,11 +337,20 @@ def homepage():
     """
 
     if g.user:
-        messages = (Message
-                    .query
-                    .order_by(Message.timestamp.desc())
-                    .limit(100)
-                    .all())
+        user_id = g.user.id
+        user = User.query.get(user_id)
+        # get logged-in user's messages per the assignment's instructions
+        user_messages = Message.query.filter_by(user_id=user_id)
+
+        # get user id's of the users ('warblers') the logged-in-user is following
+        following_user_ids = [warbler.id for warbler in user.following]
+        # get messages of the users our logged-in person is following
+        following_messages = Message.query.filter(Message.user_id.in_(following_user_ids))
+
+        # finally, combine and order the two groups of gathered messages
+        messages = user_messages.union(following_messages)\
+                                .order_by(Message.timestamp.desc())\
+                                .limit(100).all()
 
         return render_template('home.html', messages=messages)
 
