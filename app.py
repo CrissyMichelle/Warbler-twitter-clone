@@ -122,7 +122,7 @@ def logout():
     """Handle logout of user."""
     user = User.query.get(session[CURR_USER_KEY])
 
-    do_login(user)
+    do_logout()
     flash(f"A Bientot, {user.username}!", "Logout success")
     return redirect("/login")
 
